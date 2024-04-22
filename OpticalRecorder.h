@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <map>
 #include "G4OpticalPhoton.hh"
 #include "G4OpBoundaryProcess.hh"
 #include "np.h"
@@ -89,6 +91,8 @@ struct OpticalRecorder
     static constexpr const char* _EFFICIENCY_CULL    = "EX" ;
     static constexpr const char* _BAD_FLAG           = "XX" ;
     static const char* Flag(unsigned flag); 
+    static std::string FlagSequence(uint64_t seqhis ); 
+    static const char* FlagElement(uint64_t seqhis, unsigned j);
 
 
     template <typename T>
@@ -108,6 +112,18 @@ struct OpticalRecorder
 
     void PreUserTrackingAction(const G4Track* trk);
     void PostUserTrackingAction(const G4Track* trk);
+
+    static std::string DescSeq( const std::map<uint64_t,uint64_t>& _seqmap ); 
+    static void GetSeqName( std::vector<std::string>& seqname, const std::map<uint64_t,uint64_t>& _seqmap ); 
+    std::string descSeq() const ; 
+
+    static bool StartsWith( const char* s, const char* q); 
+    static uint64_t FindSeq(const std::map<uint64_t,uint64_t>& _seqmap, const char* seq ); 
+    static uint64_t CountNibbles(uint64_t x); 
+
+    std::string descSpeed(const char* seq) const ; 
+    std::string descSpeedAll() const ; 
+
     static int TrackIdx( const G4Track* trk ); 
 
     static unsigned PointFlag( const G4StepPoint* point ); 
@@ -126,6 +142,10 @@ struct OpticalRecorder
     static double Wavelength( const double* a ); 
     static double DeltaTime( const double* a, const double* b );
     static double DeltaPos( const double* a, const double* b );
+    static double GetSpeed(const double* _pp, int _trk_idx, int _point_idx ); 
+    static void  GetPointSpeed( std::vector<double>& speeds, const double* _pp, uint64_t seqhis, int _point_idx ); 
+
+    double getSpeed(int _point_idx) const ; 
     std::string descPoint(int _point_idx) const ; 
 
 
@@ -148,6 +168,8 @@ struct OpticalRecorder
     double* pp = nullptr ; 
     uint64_t* qq = nullptr ; 
     std::string desc ; 
+
+    std::map<uint64_t,uint64_t> seqmap ; 
 
 }; 
 
@@ -238,7 +260,20 @@ const char* OpticalRecorder::Flag(const unsigned int flag)
     return str;
 }
 
+// OpticksPhoton::FlagSequence
+std::string OpticalRecorder::FlagSequence(uint64_t seqhis )
+{
+    std::stringstream ss ;
+    for(unsigned j=0 ; j < 16   ; j++) ss << FlagElement(seqhis,j) << " " ; 
+    return ss.str();
+}
 
+const char* OpticalRecorder::FlagElement(uint64_t seqhis, unsigned j)
+{
+    uint64_t f = (seqhis >> j*4) & 0xF ; 
+    unsigned flg = f == 0 ? 0 : 0x1 << (f - 1) ; 
+    return Flag(flg) ; 
+}
 
 
 // U4OpBoundaryProcess::Get
@@ -351,6 +386,9 @@ double OpticalRecorder::DeltaPos( const double* a, const double* b )
 
 
 
+
+
+
 std::string OpticalRecorder::Desc( const double* p, int num )
 {
     std::stringstream ss ; 
@@ -393,6 +431,13 @@ void OpticalRecorder::EndOfEventAction(const G4Event* evt)
 
     if(!desc.empty()) np::WriteString( FOLD, "NPFold_meta.txt", desc.c_str() ); 
 
+    std::cout << descSeq() ; 
+    //std::cout << descSpeed("TO BT SA") ; 
+    //std::cout << descSpeed("TO BR BT SA") ; 
+    //std::cout << descSpeed("TO BR BR BT SA") ; 
+
+    std::cout << descSpeedAll() ; 
+
     clear(); 
 }
 void OpticalRecorder::PreUserTrackingAction(const G4Track* trk )
@@ -412,7 +457,7 @@ void OpticalRecorder::PostUserTrackingAction(const G4Track* trk)
     assert( TrackIdx(trk) == trk_idx ); 
  
     uint64_t seq = getHistory(trk_idx); 
-    if(1) std::cout 
+    if(0) std::cout 
         << "OpticalRecorder::PostUserTrackingAction"
         << " trk_idx :" << trk_idx 
         << " point_idx:" << point_idx 
@@ -420,8 +465,120 @@ void OpticalRecorder::PostUserTrackingAction(const G4Track* trk)
         << " seq: " << std::hex << seq << std::dec
         << "\n" 
         ; 
-    
+
+
+   if(seqmap.count(seq)==0) seqmap[seq] = 1 ; 
+   else                     seqmap[seq] += 1 ;  
 }
+
+
+std::string OpticalRecorder::DescSeq( const std::map<uint64_t,uint64_t>& _seqmap )
+{
+    std::stringstream ss ;
+    ss << "[OpticalRecorder::DescSeq\n" ;  
+    typedef std::map<uint64_t,uint64_t> MUU ; 
+    for(MUU::const_iterator it=_seqmap.begin() ; it!=_seqmap.end() ; it++) ss 
+        << std::setw(10) << it->second
+        << " : "
+        << FlagSequence(it->first )
+        << "\n"
+        ;
+    ss << "]OpticalRecorder::DescSeq\n" ;  
+    return ss.str(); 
+}
+
+void OpticalRecorder::GetSeqName( std::vector<std::string>& seqname, const std::map<uint64_t,uint64_t>& _seqmap ) 
+{
+    typedef std::map<uint64_t,uint64_t> MUU ; 
+    for(MUU::const_iterator it=_seqmap.begin() ; it!=_seqmap.end() ; it++) 
+    {
+        std::string nm = FlagSequence(it->first ) ;
+        seqname.push_back(nm);    
+    }
+} 
+
+std::string OpticalRecorder::descSeq() const 
+{
+    return DescSeq(seqmap); 
+}
+
+
+// sstr::StartsWith
+bool OpticalRecorder::StartsWith( const char* s, const char* q)   // static
+{
+    return s && q && strlen(q) <= strlen(s) && strncmp(s, q, strlen(q)) == 0 ; 
+}
+
+uint64_t OpticalRecorder::FindSeq(const std::map<uint64_t,uint64_t>& _seqmap, const char* seq ) // static
+{
+    uint64_t seqhis = 0 ; 
+    typedef std::map<uint64_t,uint64_t> MUU ;
+    for(MUU::const_iterator it=_seqmap.begin() ; it!=_seqmap.end() ; it++) 
+    {
+        std::string nm = FlagSequence(it->first ) ;
+        if(StartsWith(nm.c_str(), seq)) seqhis = it->first ;               
+    }
+    return seqhis ; 
+}
+
+// SBit::count_nibbles
+uint64_t OpticalRecorder::CountNibbles(uint64_t x)
+{
+    x |= x >> 1 ; 
+    x |= x >> 2 ; 
+    x &= 0x1111111111111111ull ; 
+
+    x = (x + (x >> 4)) & 0xF0F0F0F0F0F0F0Full ; 
+
+    uint64_t count = (x * 0x101010101010101ull) >> 56 ; 
+    return count ; 
+}
+
+
+std::string OpticalRecorder::descSpeed(const char* seq) const 
+{
+    uint64_t seqhis = FindSeq(seqmap, seq ); 
+    uint64_t nibs = CountNibbles(seqhis); 
+    std::stringstream ss ;
+    ss << "[OpticalRecorder::descSpeed\n" ;  
+    ss << " seq[" << ( seq ? seq : "-" ) << "]" ; 
+    ss << " seqhis[" << std::hex << seqhis << std::dec << "]" ;  
+    ss << " nibs[" << nibs << "]\n" ; 
+    for(int i=1 ; i < int(nibs) ; i++)
+    {
+        int _point_idx = i ; 
+        std::vector<double> speeds ; 
+        GetPointSpeed( speeds, pp, seqhis, _point_idx ); 
+        auto minmax = std::minmax_element( speeds.begin(), speeds.end() ); 
+        ss
+           << FlagElement(seqhis, i-1 )
+           << " -> "
+           << FlagElement(seqhis, i )
+           << " speeds.len/min/max[" 
+           << speeds.size() 
+           << "/"  
+           << *minmax.first 
+           << "/"  
+           << *minmax.second 
+           << "]\n" 
+           ;
+    }
+    ss << "]OpticalRecorder::descSpeed\n" ;  
+    return ss.str(); 
+}
+
+std::string OpticalRecorder::descSpeedAll() const 
+{
+    std::stringstream ss ;
+    typedef std::map<uint64_t,uint64_t> MUU ;
+    for(MUU::const_iterator it=seqmap.begin() ; it!=seqmap.end() ; it++) 
+    {
+        std::string nm = FlagSequence(it->first ) ;
+        ss << descSpeed(nm.c_str()) ; 
+    }
+    return ss.str(); 
+}
+
 
 int OpticalRecorder::TrackIdx( const G4Track* track )
 {
@@ -530,6 +687,9 @@ const double* OpticalRecorder::GetRecord(const double* _pp, int _trk_idx, int _p
     return rec ;     
 }
 
+
+
+
 const double* OpticalRecorder::getRecord(int _point_idx) const
 {
     return GetRecord( const_cast<const double*>(pp), trk_idx, _point_idx );  
@@ -544,7 +704,7 @@ void OpticalRecorder::recordPoint( const G4StepPoint* point )
     writePoint( point, flag ); 
      
 
-    if( trk_idx < 5 && true ) std::cout 
+    if( trk_idx < 5 && 0 ) std::cout 
         << "OpticalRecorder::recordPoint" 
         << " trk_idx " << trk_idx 
         << " point_idx " << point_idx 
@@ -558,6 +718,40 @@ void OpticalRecorder::recordPoint( const G4StepPoint* point )
 }
 
 
+
+double OpticalRecorder::GetSpeed(const double* _pp, int _trk_idx, int _point_idx ) // static
+{
+    const double* curr = GetRecord( _pp, _trk_idx, _point_idx ); 
+    const double* prev = GetRecord( _pp, _trk_idx, _point_idx - 1 ); 
+
+    double dt  = DeltaTime( prev, curr ); 
+    double dp  = DeltaPos(  prev, curr ); 
+    double speed = dt > 0. && dp > 0. ? dp/dt : -1. ; 
+
+    return speed ; 
+}
+
+
+void OpticalRecorder::GetPointSpeed( std::vector<double>& speeds, const double* _pp, uint64_t q_seqhis, int _point_idx )
+{
+    for(int i=0 ; i < MAX_PHOTON ; i++)
+    {
+        int _trk_idx = i ; 
+        uint64_t seqhis = GetHistory(_pp, _trk_idx);   
+        if(seqhis != q_seqhis) continue ;
+        double speed = GetSpeed( _pp, _trk_idx, _point_idx );   
+        assert( speed >  -1. ); 
+        speeds.push_back(speed);  
+    }
+}
+
+
+double OpticalRecorder::getSpeed(int _point_idx) const
+{ 
+    return GetSpeed( pp, trk_idx, _point_idx ); 
+}
+
+
 std::string OpticalRecorder::descPoint(int _point_idx) const
 {
     const double* curr = getRecord( _point_idx ); 
@@ -566,6 +760,9 @@ std::string OpticalRecorder::descPoint(int _point_idx) const
     double dt  = DeltaTime( prev, curr ); 
     double dp  = DeltaPos(  prev, curr ); 
     double speed = dt > 0. && dp > 0. ? dp/dt : -1. ; 
+    double speed2 = getSpeed(_point_idx) ; 
+    assert( speed == speed2 ); 
+
 
     std::stringstream ss ; 
     ss << Desc( curr, 16 ) << "\n" << " dt " << dt << " dp " << dp << " dp/dt " << speed << "\n" ;  
@@ -605,6 +802,7 @@ std::string OpticalRecorder::DescHistory(const double* _pp,  int _trk_idx)
     std::string str = ss.str(); 
     return str ; 
 }
+
 
 std::string OpticalRecorder::descHistory(int _trk_idx) const
 {

@@ -3,15 +3,9 @@ usage(){ cat << EOU
 
 ~/o/examples/Geant4/OpticalApp/OpticalAppTest.sh 
 
-~/o/examples/Geant4/OpticalApp/OpticalAppTest.sh ana
-
-
 BP=G4ParticleChange::DumpInfo ~/o/examples/Geant4/OpticalApp/OpticalAppTest.sh
 
 BP=G4OpBoundaryProcess::PostStepDoIt ~/o/examples/Geant4/OpticalApp/OpticalAppTest.sh
-
-REC=3 ~/o/examples/UseGeometryShader/run.sh 
-
 
 
 EOU
@@ -24,8 +18,7 @@ export FOLD=/tmp/$name
 mkdir -p $FOLD
 
 bin=$FOLD/$name
-#script=$name.py 
-script=${name}_ok.py 
+script=$name.py 
 G4CFG=$(which geant4-config)
 
 vars="BASH_SOURCE name bin FOLD G4CFG"
@@ -37,7 +30,7 @@ vars="BASH_SOURCE name bin FOLD G4CFG"
 
 # -Wno-deprecated-copy \
 
-defarg=info_build_run_ana
+defarg=info_build_run
 
 [ -n "$BP" ] && defarg=dbg 
 
@@ -68,11 +61,6 @@ fi
 if [ "${arg/dbg}" != "$arg" ]; then
     dbg__ $bin
     [ $? -ne 0 ] && echo $BASH_SOURCE : dbg error && exit 3
-fi
-
-if [ "${arg/ana}" != "$arg" ]; then
-    ${IPYTHON:-ipython} --pdb -i $script 
-    [ $? -ne 0 ] && echo $BASH_SOURCE : run error && exit 2
 fi
 
 exit 0 
