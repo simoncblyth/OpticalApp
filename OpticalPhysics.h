@@ -2,6 +2,8 @@
 
 #include "G4VUserPhysicsList.hh"
 #include "G4OpBoundaryProcess.hh"
+#include "G4OpAbsorption.hh"
+
 
 struct OpticalPhysics : public G4VUserPhysicsList
 {
@@ -23,6 +25,8 @@ inline void OpticalPhysics::ConstructProcess()
 inline void OpticalPhysics::ConstructOp()
 {
     G4VProcess* boundary = new G4OpBoundaryProcess();   
+    G4VProcess* absorption = new G4OpAbsorption();   
+
 
     auto particleIterator=GetParticleIterator();
     particleIterator->reset();
@@ -34,6 +38,7 @@ inline void OpticalPhysics::ConstructOp()
 
         if (particleName == "opticalphoton")
         {
+            pmanager->AddDiscreteProcess(absorption);
             pmanager->AddDiscreteProcess(boundary);
         }
     }

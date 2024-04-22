@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <map>
+
+#include "G4Version.hh"
 #include "G4OpticalPhoton.hh"
 #include "G4OpBoundaryProcess.hh"
+
 #include "np.h"
 
 #define FFS(x)   (ffs(x))
@@ -103,6 +106,7 @@ struct OpticalRecorder
  
     static void WritePoint( double* p , const G4StepPoint* point, unsigned flag ); 
     static std::string Desc( const double* p, int num ); 
+    static std::string DescVersion(); 
  
     void BeginOfRunAction(const G4Run* run);
     void EndOfRunAction(const G4Run* run);
@@ -404,6 +408,13 @@ std::string OpticalRecorder::Desc( const double* p, int num )
     return str ; 
 }
 
+std::string OpticalRecorder::DescVersion()
+{
+    std::stringstream ss ; 
+    ss << G4Version << G4Date << "\n" ;
+    std::string str = ss.str(); 
+    return str ; 
+}
 
 
 void OpticalRecorder::BeginOfRunAction(const G4Run* ){         std::cout << "OpticalRecorder::BeginOfRunAction\n" ;    }
@@ -437,6 +448,7 @@ void OpticalRecorder::EndOfEventAction(const G4Event* evt)
     //std::cout << descSpeed("TO BR BR BT SA") ; 
 
     std::cout << descSpeedAll() ; 
+    std::cout << DescVersion() ; 
 
     clear(); 
 }
@@ -815,8 +827,6 @@ uint64_t OpticalRecorder::getHistory(int _trk_idx) const
     assert( seq == seq1 ); 
     return seq ; 
 }
-
-
 
 
 
