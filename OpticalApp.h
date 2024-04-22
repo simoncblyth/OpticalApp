@@ -49,10 +49,12 @@ struct OpticalApp
     static G4Material* Vacuum(); 
     static G4MaterialPropertyVector* Make_V(double value); 
     static G4MaterialPropertiesTable* Create_MPT(const char* key, double val ); 
+    static G4MaterialPropertiesTable* Create_MPT(const char* k0, double v0, const char* k1, double v1 ); 
     static G4LogicalVolume* Box_( double halfside, G4Material* material, const char* prefix=nullptr, const double* scale=nullptr ); 
 
     G4VPhysicalVolume* Construct(); 
 
+    static const char* getenvvar(const char* ekey, const char* fallback); 
     static int getenvint(const char* ekey, int fallback); 
     static constexpr const char* _DEBUG_GENIDX = "OpticalApp__GeneratePrimaries_DEBUG_GENIDX" ;
     void GeneratePrimaries(G4Event* evt); 
@@ -83,7 +85,19 @@ struct OpticalApp
 
 G4RunManager* OpticalApp::InitRunManager()  // static
 {
-    G4VUserPhysicsList* phy = (G4VUserPhysicsList*)new OpticalPhysics ; 
+    const char* ekey = "OpticalApp__InitRunManager_OpticalPhysics" ; 
+    const char* edef = "G4OpAbsorption,G4OpBoundaryProcess" ; 
+    const char* ecnf = getenvvar(ekey, edef ); 
+
+    std::cout 
+        << "OpticalApp::InitRunManager" 
+        << "\n" 
+        << " ekey[" << ( ekey ? ekey : "-" ) << "]\n" 
+        << " edef[" << ( edef ? edef : "-" ) << "]\n" 
+        << " ecnf[" << ( ecnf ? ecnf : "-" ) << "]\n" 
+        ; 
+
+    G4VUserPhysicsList* phy = (G4VUserPhysicsList*)new OpticalPhysics(ecnf) ; 
     G4RunManager* runMgr = new G4RunManager ; 
     runMgr->SetUserInitialization(phy) ; 
     return runMgr ; 
@@ -98,6 +112,11 @@ int OpticalApp::Main()  // static
 }
 
 
+const char* OpticalApp::getenvvar(const char* ekey, const char* fallback) 
+{
+    const char* v = getenv(ekey); 
+    return v ? v : fallback ; 
+}
 
 int OpticalApp::getenvint(const char* ekey, int fallback)
 {
@@ -177,6 +196,18 @@ G4MaterialPropertiesTable* OpticalApp::Create_MPT(const char* key, double val ) 
     return mpt ;
 }
 
+G4MaterialPropertiesTable* OpticalApp::Create_MPT(const char* k0, double v0, const char* k1, double v1 )  // static
+{
+    G4MaterialPropertyVector* mpv0 = Make_V(v0) ;
+    G4MaterialPropertyVector* mpv1 = Make_V(v1) ;
+
+    G4MaterialPropertiesTable* mpt = new G4MaterialPropertiesTable ;
+    mpt->AddProperty(k0, mpv0 );
+    mpt->AddProperty(k1, mpv1 );
+    return mpt ;
+}
+
+
 // U4VolumeMaker::Box_
 G4LogicalVolume* OpticalApp::Box_( double halfside, G4Material* material, const char* prefix, const double* scale )
 {
@@ -208,7 +239,7 @@ G4VPhysicalVolume* OpticalApp::Construct()
     G4Material* drop_material  = nist->FindOrBuildMaterial("G4_WATER") ;
    
     medium_material->SetMaterialPropertiesTable(Create_MPT("RINDEX",1.)) ; 
-    drop_material->SetMaterialPropertiesTable(Create_MPT("RINDEX",1.333)) ; 
+    drop_material->SetMaterialPropertiesTable(Create_MPT("RINDEX",1.333, "ABSLENGTH", 100.f*CLHEP::mm)) ; 
 
     double halfside = 100. ; 
     double factor = 1. ; 

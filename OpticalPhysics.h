@@ -7,10 +7,20 @@
 
 struct OpticalPhysics : public G4VUserPhysicsList
 {
+    const char* config ; 
+
+    OpticalPhysics(const char* config); 
+
     void ConstructParticle(); 
     void ConstructProcess() ; 
     void ConstructOp();
 };
+
+OpticalPhysics::OpticalPhysics(const char* _config)
+    :
+    config(_config ? strdup(_config) : nullptr )
+{
+} 
 
 inline void OpticalPhysics::ConstructParticle()
 {
@@ -24,9 +34,9 @@ inline void OpticalPhysics::ConstructProcess()
 
 inline void OpticalPhysics::ConstructOp()
 {
+
     G4VProcess* boundary = new G4OpBoundaryProcess();   
     G4VProcess* absorption = new G4OpAbsorption();   
-
 
     auto particleIterator=GetParticleIterator();
     particleIterator->reset();
@@ -38,8 +48,21 @@ inline void OpticalPhysics::ConstructOp()
 
         if (particleName == "opticalphoton")
         {
-            pmanager->AddDiscreteProcess(absorption);
-            pmanager->AddDiscreteProcess(boundary);
+            std::stringstream ss;  
+            ss.str(config)  ;
+            std::string cfg;
+            while (std::getline(ss, cfg, ',')) 
+            {   
+                if(cfg.empty()) continue ;   
+                const char* _cfg = cfg.c_str() ;  
+                if(      strcmp(_cfg,"G4OpAbsorption")==0) pmanager->AddDiscreteProcess(absorption);
+                else if( strcmp(_cfg,"G4OpBoundaryProcess")==0) pmanager->AddDiscreteProcess(boundary);
+                else
+                {
+                   std::cerr << "OpticalPhysics::ConstructOp FATAL unhandled [" << ( _cfg ? _cfg : "-" ) << "]\n" ;
+                }
+            }
+
         }
     }
 }
