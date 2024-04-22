@@ -1,7 +1,2 @@
 #include "OpticalApp.h"
-int main()
-{
-    return OpticalApp::Main();  
-}
-
-
+int main(){ return OpticalApp::Main(); }

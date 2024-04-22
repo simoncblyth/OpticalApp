@@ -8,8 +8,6 @@ Usage::
 
     ~/o/examples/Geant4/OpticalApp/OpticalAppTest.sh
 
-BUT: its no so far showing the issue ? 
-
 **/
 
 #include <cmath>
@@ -320,8 +318,11 @@ bool OpticalApp::IsOptical(const G4Track* trk) // static
 void OpticalApp::PreUserTrackingAction(const G4Track* trk)
 {  
     assert( IsOptical(trk) ); 
-    std::cout << _UseGivenVelocity_KLUDGE << " : " << UseGivenVelocity_KLUDGE << "\n" ; 
-    if(UseGivenVelocity_KLUDGE == 1 ) const_cast<G4Track*>(trk)->UseGivenVelocity(true);  
+    if(UseGivenVelocity_KLUDGE == 1 ) 
+    {
+        std::cout << _UseGivenVelocity_KLUDGE << " : " << UseGivenVelocity_KLUDGE << "\n" ; 
+        const_cast<G4Track*>(trk)->UseGivenVelocity(true);  
+    }
     fRecorder->PreUserTrackingAction(trk) ; 
 }
 

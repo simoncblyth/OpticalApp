@@ -34,6 +34,12 @@ enum
 }; 
 
 
+union uif64_t {
+        uint64_t  u ; 
+        int64_t   i ; 
+        double    f ; 
+};  
+
 
 struct OpticalRecorder
 {
@@ -89,6 +95,8 @@ struct OpticalRecorder
     static T* GetOpBoundaryProcess();
 
     void writePoint( const G4StepPoint* point, unsigned flag ); 
+    uint64_t getSeq(int _trk_idx) const ; 
+ 
     static void WritePoint( double* p , const G4StepPoint* point, unsigned flag ); 
     static std::string Desc( const double* p, int num ); 
  
@@ -109,12 +117,22 @@ struct OpticalRecorder
 
 
     static bool Valid(int trk_idx, int point_idx);
-    double* getRecord(int _point_idx) const ;
+    static const double* GetRecord(const double* _pp, int _trk_idx, int _point_idx); 
+
+    const double* getRecord(int _point_idx) const ;
     void recordPoint( const G4StepPoint* point ); 
 
+    static unsigned PointFlag(const double* a); 
+    static double Wavelength( const double* a ); 
     static double DeltaTime( const double* a, const double* b );
     static double DeltaPos( const double* a, const double* b );
     std::string descPoint(int _point_idx) const ; 
+
+
+    static uint64_t GetHistory(const double* _pp,  int _trk_idx); 
+    static std::string DescHistory(const double* _pp, int _trk_idx) ; 
+    std::string descHistory(int _trk_idx) const ; 
+    uint64_t    getHistory(int _trk_idx) const ; 
 
     static constexpr const int MAX_PHOTON = 100000 ; 
     static constexpr const int MAX_POINT  = 10 ; 
@@ -250,10 +268,10 @@ inline T* OpticalRecorder::GetOpBoundaryProcess()
 // U4StepPoint::Update
 void OpticalRecorder::writePoint( const G4StepPoint* point, unsigned flag )
 {
-    double* p = getRecord(point_idx); 
+    const double* p = getRecord(point_idx); 
     if(!p) return ; 
 
-    WritePoint(p, point, flag ); 
+    WritePoint( const_cast<double*>(p), point, flag ); 
 
     uint64_t& q0 = qq[4*trk_idx+0] ; 
 
@@ -261,6 +279,11 @@ void OpticalRecorder::writePoint( const G4StepPoint* point, unsigned flag )
     unsigned shift = 4*point_idx ; 
     q0 |= (( FFS(flag) & MASK ) << shift );  
     
+}
+
+uint64_t OpticalRecorder::getSeq(int _trk_idx) const
+{
+    return qq[4*_trk_idx+0] ; 
 }
 
 
@@ -290,12 +313,6 @@ void OpticalRecorder::WritePoint( double* p, const G4StepPoint* point, unsigned 
     p[11] = wavelength/nm ;
 
 
-    union uif64_t {
-        uint64_t  u ; 
-        int64_t   i ; 
-        double    f ; 
-    };  
-
     uif64_t uif ; 
     uif.u = flag ;  
 
@@ -305,6 +322,20 @@ void OpticalRecorder::WritePoint( double* p, const G4StepPoint* point, unsigned 
     p[15] = uif.f ; 
 }
 
+
+
+unsigned OpticalRecorder::PointFlag(const double* a)
+{
+    if(a == nullptr) return 0 ; 
+    uif64_t uif ; 
+    uif.f = a[15] ;  
+    return unsigned(uif.u) ; 
+}
+
+double OpticalRecorder::Wavelength( const double* a )
+{
+    return a ? a[11] : 0. ; 
+} 
 
 double OpticalRecorder::DeltaTime( const double* a, const double* b )
 {
@@ -380,10 +411,13 @@ void OpticalRecorder::PostUserTrackingAction(const G4Track* trk)
 {
     assert( TrackIdx(trk) == trk_idx ); 
  
-    if(0) std::cout 
+    uint64_t seq = getHistory(trk_idx); 
+    if(1) std::cout 
         << "OpticalRecorder::PostUserTrackingAction"
         << " trk_idx :" << trk_idx 
         << " point_idx:" << point_idx 
+        << " descHistory: " << descHistory(trk_idx)
+        << " seq: " << std::hex << seq << std::dec
         << "\n" 
         ; 
     
@@ -490,22 +524,27 @@ bool OpticalRecorder::Valid(int _trk_idx, int _point_idx)
           ;  
 }
 
-double* OpticalRecorder::getRecord(int _point_idx) const
+const double* OpticalRecorder::GetRecord(const double* _pp, int _trk_idx, int _point_idx)  // static
 {
-    double* rec = Valid(trk_idx, _point_idx) ? pp + 16*MAX_POINT*trk_idx + 16*_point_idx  : nullptr ; 
+    const double* rec = Valid(_trk_idx, _point_idx) ? _pp + 16*MAX_POINT*_trk_idx + 16*_point_idx  : nullptr ; 
     return rec ;     
+}
+
+const double* OpticalRecorder::getRecord(int _point_idx) const
+{
+    return GetRecord( const_cast<const double*>(pp), trk_idx, _point_idx );  
 }
 
 void OpticalRecorder::recordPoint( const G4StepPoint* point )
 {
-    unsigned flag = point_idx == 0 ? TORCH : PointFlag(point) ;  
+    unsigned flag = point_idx == 0 ? unsigned(TORCH) : PointFlag(point) ;  
 
     if( flag == NAN_ABORT ) return ; 
  
     writePoint( point, flag ); 
      
 
-    if( trk_idx < 5 ) std::cout 
+    if( trk_idx < 5 && true ) std::cout 
         << "OpticalRecorder::recordPoint" 
         << " trk_idx " << trk_idx 
         << " point_idx " << point_idx 
@@ -521,8 +560,8 @@ void OpticalRecorder::recordPoint( const G4StepPoint* point )
 
 std::string OpticalRecorder::descPoint(int _point_idx) const
 {
-    double* curr = getRecord( _point_idx ); 
-    double* prev = getRecord( _point_idx - 1 ); 
+    const double* curr = getRecord( _point_idx ); 
+    const double* prev = getRecord( _point_idx - 1 ); 
 
     double dt  = DeltaTime( prev, curr ); 
     double dp  = DeltaPos(  prev, curr ); 
@@ -533,4 +572,54 @@ std::string OpticalRecorder::descPoint(int _point_idx) const
     std::string str = ss.str(); 
     return str ; 
 }
+
+
+uint64_t OpticalRecorder::GetHistory(const double* _pp,  int _trk_idx)
+{
+    uint64_t seq = 0 ; 
+    for(int i=0 ; i < MAX_POINT ; i++)
+    {
+        int _point_idx = i ; 
+        const double* rec = GetRecord(_pp, _trk_idx, _point_idx ); 
+        double wl = Wavelength(rec); 
+        if(wl == 0.) break ; 
+        unsigned fl = PointFlag(rec); 
+        seq |= ( ( FFS(fl) & 0xfull ) << i*4 ) ;  
+    }
+    return seq ; 
+}
+
+
+std::string OpticalRecorder::DescHistory(const double* _pp,  int _trk_idx) 
+{
+    std::stringstream ss ; 
+    for(int i=0 ; i < MAX_POINT ; i++)
+    {
+        int _point_idx = i ; 
+        const double* rec = GetRecord(_pp, _trk_idx, _point_idx ); 
+        double wl = Wavelength(rec); 
+        if(wl == 0.) break ; 
+        unsigned fl = PointFlag(rec); 
+        ss << Flag(fl) << " " ; 
+    }
+    std::string str = ss.str(); 
+    return str ; 
+}
+
+std::string OpticalRecorder::descHistory(int _trk_idx) const
+{
+    return DescHistory(pp, _trk_idx) ; 
+}
+uint64_t OpticalRecorder::getHistory(int _trk_idx) const
+{
+    uint64_t seq = GetHistory(pp, _trk_idx) ; 
+    uint64_t seq1 = getSeq(_trk_idx) ; 
+    assert( seq == seq1 ); 
+    return seq ; 
+}
+
+
+
+
+
 

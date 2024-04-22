@@ -26,8 +26,9 @@ mkdir -p $FOLD
 bin=$FOLD/$name
 #script=$name.py 
 script=${name}_ok.py 
+G4CFG=$(which geant4-config)
 
-vars="BASH_SOURCE name bin FOLD"
+vars="BASH_SOURCE name bin FOLD G4CFG"
 
 
 #export OpticalApp__GeneratePrimaries_DEBUG_GENIDX=50000
@@ -51,8 +52,10 @@ if [ "${arg/build}" != "$arg" ]; then
             -I. \
             -g \
             $(geant4-config --cflags) \
+            -Wno-shadow \
+            -Wno-deprecated-copy \
             $(geant4-config --libs) \
-             -lstdc++ \
+            -lstdc++ -lm \
             -o $bin
     [ $? -ne 0 ] && echo $BASH_SOURCE : build error && exit 1 
 fi
